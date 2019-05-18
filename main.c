@@ -28,6 +28,7 @@ int my_room = -1;
     // n - kobiety w ntej szatni (np room_av[0], room_av[3], room_av[6])
     // n + 1 - mężczyźni w ntej szatni (np room_av[1], room_av[4], room_av[7])
     // n + 2 - liczba zajętych szafek w ntej szatni (np room_av[2], room_av[5], room_av[8])
+int visited_pool_num = 0;
 
 pthread_mutex_t	lock0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER; 
@@ -36,6 +37,12 @@ int own_rand(int start, int end){
     int rnd = rand();
     int range = end-start;
     return start + (rnd%range);
+}
+
+void exit_with_error(char* err){
+    printf(err);
+    printf("Liczba wizyt na basenie: %d\n", visited_pool_num);
+    exit(1234);
 }
 
 int better_priority(int r_rank, int r_timer, int r_prev_state){
@@ -103,7 +110,8 @@ void *wait_for_message(void *arguments){
                     send_case_21(sender);
                 break;
                 default:
-                    printf("ERROR R case 0\n");
+                    exit_with_error("ERROR R case 0\n");
+    
                 break;
             }
             break;
@@ -138,7 +146,8 @@ void *wait_for_message(void *arguments){
                     send_case_21(sender);
                 break;  
                 default:
-                    printf("ERROR R case 1\n");
+                    exit_with_error("ERROR R case 1\n");
+    
                 break;
             }
             break;
@@ -155,6 +164,7 @@ void *wait_for_message(void *arguments){
                     break;
                 case 20:
                     received_messages++;
+                    printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
                     increment_rooms();
     
                     if(received_messages == proc_num - 1){
@@ -163,10 +173,11 @@ void *wait_for_message(void *arguments){
                     }
                     break;
                 case 21:
-                    printf("ERROR! Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
+                    exit_with_error("ERROR! Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                 break;  
                 default:
-                    printf("ERROR R case 2\n");
+                    exit_with_error("ERROR R case 2\n");
+    
                 break;
             }
             break;
@@ -183,7 +194,8 @@ void *wait_for_message(void *arguments){
                     send_case_21(sender);
                 break;  
                 default:
-                    printf("ERROR R case 3\n");
+                    exit_with_error("ERROR R case 3\n");
+    
                 break;
             }
             break;
@@ -200,12 +212,13 @@ void *wait_for_message(void *arguments){
                     send_case_21(sender);
                 break;  
                 default:
-                    printf("ERROR R case 4\n");
+                    exit_with_error("ERROR R case 4\n");
+    
                 break;
             }
             break;
         default:
-            printf("ERROR Receive\n");
+            exit_with_error("ERROR Receive\n");
             break;
         }
     }
@@ -241,11 +254,7 @@ void send_case_11(int send_to){
 
 void increment_rooms(){
     if(msg[1] >= 0){// czy jest w szatni
-        if(msg[3] == 0){ // czy jest kobietą
-            room_av[msg[2]]++;
-        } else { //jest mężczyzną
-            room_av[msg[2] + 1]++;
-        }
+        room_av[msg[2] + male]++; // zwiększamy licznik danej płci w szatni
     } else if(msg[2] >= 0) { // jeśli jest poza szatnią, ale ma zajętą szafke
         room_av[msg[2] + 2]++;
     }
@@ -278,7 +287,7 @@ void reset_global_variables(){
     expected_messages = NUM_PROC - 1;
     max_time = -1;
 
-    for(int i = 0; i < 3 * 3; i++){
+    for(int i = 0; i < 9; i++){
         room_av[i] = 0;
     }
 }
@@ -292,10 +301,16 @@ void change_state(int new_state){
 
 int available_room() {
     for(int i = 0; i < 3; i++){ // dla każdej sztani
-        if(room_av[3*i + 2] < room_capacity && room_av[3*i + 1 - male] == 0) return i;
         // sprawdzam czy jest jakaś wolna szafka
         // oraz czy w danej szatni jest aktualnie osoba przeciwnej płci
         // jeśli tak to zwracam numer tej szatni
+        if(room_av[3*i + 2] < room_capacity && room_av[3*i + 1 - male] == 0){
+            return i;
+        } else if(room_av[3*i + 2] > room_capacity){
+            exit_with_error("ERROR więcej zajętych szafek niż dostępnych!\n");
+        } else if(room_av[3*i + 1] > 0 && room_av[3*i] > 0) {
+            exit_with_error("ERROR kobieta i mężczyzna w jednej szatni!\n");
+        }
     }
     // jeśli nie znajdzie szatni to zwracam -1
     return -1;
@@ -342,7 +357,7 @@ int main(int argc, char **argv)
             sleep(timer%4);
             msg[0] = 1;
             msg[1] = timer;
-            printf("%d Send\n", rank);
+            // printf("%d Send\n", rank);
             send_to_all(); // wysyłamy wiadomość do wszystkich
             pthread_cond_wait(&cond0, &lock0);
             timer = max_time + 1;
@@ -372,7 +387,7 @@ int main(int argc, char **argv)
             break;
         case 3: // szatnia
             resend_queued_messages();
-            sleep(timer%4);
+            sleep(timer%4 + 1);
             if(previous_state == 2){
                 change_state(4);
             } else {
@@ -380,11 +395,12 @@ int main(int argc, char **argv)
             }
             break;
         case 4: // basen
-            sleep(timer%4);
+            sleep(timer%4 + 1);
+            visited_pool_num++;
             change_state(1);
             break;
         default:
-            printf("ERROR Send\n");
+            exit_with_error("ERROR Send\n");
         break;
         }
     }
