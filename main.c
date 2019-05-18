@@ -163,7 +163,7 @@ void *wait_for_message(void *arguments){
                     break;
                 case 20:
                     received_messages++;
-                    // printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
+                    printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
                     increment_rooms();
     
                     if(received_messages == proc_num - 1){
@@ -391,6 +391,7 @@ int main(int argc, char **argv)
             if(previous_state == 2){
                 change_state(4);
             } else {
+                my_room = -1;
                 change_state(0);
             }
             break;
