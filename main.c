@@ -71,7 +71,7 @@ int better_priority(int r_rank, int r_timer, int r_prev_state){
 
 void *wait_for_message(void *arguments){
     while(1){
-        // sleep(0.001);
+        sleep(0.01);
         MPI_Status status;
         MPI_Recv(msg, MSG_SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
@@ -352,58 +352,59 @@ int main(int argc, char **argv)
     printf("%d: Zaczynam od stanu %d, [szatnia: %d, płeć: %d]\n", rank, state, my_room, male);
     sleep(1);
     while(1){
-    switch (state) {
-        case 0: //sekcja lokalna
-            sleep(timer%4);
-            msg[0] = 1;
-            msg[1] = timer;
-            // printf("%d Send\n", rank);
-            send_to_all(); // wysyłamy wiadomość do wszystkich
-            pthread_cond_wait(&cond0, &lock0);
-            timer = max_time + 1;
-            change_state(1);
-            break;
-        case 1: // P1
-            // sleep(1);
-            msg[0] = 11;
-            msg[1] = timer;
-            msg[2] = previous_state;
-            // printf("%d wysyłam ALL\n", rank);
-            send_to_all();
-            // sleep(1);
-            pthread_cond_wait(&cond0, &lock0);
-            change_state(2);
-            break;
-        case 2: // P2
-            msg[0] = 21;
-            send_to_all();
-            pthread_cond_wait(&cond0, &lock0);
-            my_room = available_room();
-            if(my_room > -1){ 
-                change_state(3);
-            } else {
+        sleep(0.01);
+        switch (state) {
+            case 0: //sekcja lokalna
+                sleep(timer%4);
+                msg[0] = 1;
+                msg[1] = timer;
+                // printf("%d Send\n", rank);
+                send_to_all(); // wysyłamy wiadomość do wszystkich
+                pthread_cond_wait(&cond0, &lock0);
+                timer = max_time + 1;
                 change_state(1);
+                break;
+            case 1: // P1
+                // sleep(1);
+                msg[0] = 11;
+                msg[1] = timer;
+                msg[2] = previous_state;
+                // printf("%d wysyłam ALL\n", rank);
+                send_to_all();
+                // sleep(1);
+                pthread_cond_wait(&cond0, &lock0);
+                change_state(2);
+                break;
+            case 2: // P2
+                msg[0] = 21;
+                send_to_all();
+                pthread_cond_wait(&cond0, &lock0);
+                my_room = available_room();
+                if(my_room > -1){ 
+                    change_state(3);
+                } else {
+                    change_state(1);
+                }
+                break;
+            case 3: // szatnia
+                resend_queued_messages();
+                sleep(timer%4 + 1);
+                if(previous_state == 2){
+                    change_state(4);
+                } else {
+                    my_room = -1;
+                    change_state(0);
+                }
+                break;
+            case 4: // basen
+                sleep(timer%4 + 1);
+                visited_pool_num++;
+                change_state(1);
+                break;
+            default:
+                exit_with_error("ERROR Send\n");
+            break;
             }
-            break;
-        case 3: // szatnia
-            resend_queued_messages();
-            sleep(timer%4 + 1);
-            if(previous_state == 2){
-                change_state(4);
-            } else {
-                my_room = -1;
-                change_state(0);
-            }
-            break;
-        case 4: // basen
-            sleep(timer%4 + 1);
-            visited_pool_num++;
-            change_state(1);
-            break;
-        default:
-            exit_with_error("ERROR Send\n");
-        break;
-        }
     }
 
     pthread_kill(threads[0], NULL);
