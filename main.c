@@ -28,6 +28,8 @@ int my_room = -1;
     // n + 2 - liczba zajętych szafek w ntej szatni (np room_av[2], room_av[5], room_av[8])
 int visited_pool_num = 0;
 int was_on_pool = -1;
+int messages_sent[NUM_PROC] = {-1};
+int additional_messages = 0;
 
 pthread_mutex_t	lock0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER; 
@@ -126,7 +128,13 @@ void *wait_for_message(void *arguments){
                     r_previous_state = msg[2];
 
                     // printf("%d: Sender %d\n", rank, sender);
-                    if(better_priority(sender, r_timer, r_previous_state)){
+                    if(messages_sent[sender] == 1 && (r_previous_state == 4) ){ // jeśli nie dostaliśmy odpowiedzi, a poprzedni stan to basen
+                        send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
+                        additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
+                        break;
+                    }
+
+                    if(better_priority(sender, r_timer, r_previous_state) || messages_sent[sender] == 0){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
                         // kolejkujemy odebraną wiadomość do późniejszego odesłania
                         mes_queue[mes_queue_indx] = sender;
                         printf("%d kolejkuje %d\n", rank, sender);
@@ -138,10 +146,12 @@ void *wait_for_message(void *arguments){
                     break;
                 case 10:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
+                    messages_sent[sender] = 0; // odznaczamy, że dostaliśmy wiadomość od tego procesu
                     // printf("%d dostaje %d\n", rank, sender);
-                    if(received_messages == proc_num - 1){
+                    if(received_messages == proc_num + additional_messages - 1){
                         pthread_cond_signal(&cond0);
                         received_messages = 0;
+                        additional_messages = 0;
                     }
                     break;
                 case 21:
@@ -293,6 +303,7 @@ void other_stuff(){
 void send_to_all(int m0, int m1, int m2, int m3){
     for(int i = 0; i < NUM_PROC; i++) {
         if(i == rank) continue;
+        messages_sent[i] = 1;
         send_msg(i, m0, m1, m2, m3);
     }
 }
@@ -303,6 +314,10 @@ void reset_global_variables(){
 
     for(int i = 0; i < 9; i++){
         room_av[i] = 0;
+    }
+
+    for(int i = 0; i < NUM_PROC; i++){
+        messages_sent[i] = -1;
     }
 }
 
@@ -356,6 +371,7 @@ int main(int argc, char **argv)
     pthread_t threads[1];
     int thread_args[1];
     int result_code;
+    int first_time = 1;
 
     thread_args[0] = 0;
     result_code = pthread_create(&threads[0], NULL, wait_for_message, &thread_args[0]);
