@@ -64,7 +64,7 @@ int better_priority(int r_rank, int r_timer, int r_prev_state){
 
 void *wait_for_message(void *arguments){
     while(1){
-        sleep(0.001);
+        // sleep(0.001);
         MPI_Status status;
         MPI_Recv(msg, MSG_SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
@@ -82,6 +82,7 @@ void *wait_for_message(void *arguments){
                 // wiadomości z liczbą ostatnią cyfrą == 0 (np 20) -> wiadomość odpowiedź
                 case 0:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
+                    printf("%d: received %d messages\n", rank, received_messages);
                     if(received_messages == proc_num - 1){
                         pthread_cond_signal(&cond0);
                         received_messages = 0;
@@ -319,13 +320,14 @@ int main(int argc, char **argv)
 // #####
 
     printf("%d: Zaczynam od stanu %d, [szatnia: %d, płeć: %d]\n", rank, state, my_room, male);
-
+    sleep(1);
     while(1){
     switch (state) {
         case 0: //sekcja lokalna
             other_stuff();
             msg[0] = 1;
             msg[1] = timer;
+            printf("%d Send\n", rank);
             send_to_all(); // wysyłamy wiadomość do wszystkich
             pthread_cond_wait(&cond0, &lock0);
             timer = max_time + 1;
