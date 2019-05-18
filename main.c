@@ -90,16 +90,14 @@ void *wait_for_message(void *arguments){
                 case 0:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     // printf("%d: received %d messages\n", rank, received_messages);
+                    received_time = msg[1];
+                    if(received_time > max_time) max_time = received_time;
                     if(received_messages == proc_num - 1){
                         pthread_cond_signal(&cond0);
                         received_messages = 0;
                     }
                 break;
                 case 1:
-                    received_time = msg[1];
-                    if(received_time > max_time)
-                        max_time = received_time;
-
                     send_case_1(sender);
                     break;
                 case 11:
@@ -163,7 +161,7 @@ void *wait_for_message(void *arguments){
                     break;
                 case 20:
                     received_messages++;
-                    printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
+                    // printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
                     increment_rooms();
     
                     if(received_messages == proc_num - 1){
@@ -284,8 +282,6 @@ void reset_global_variables(){
         msg[i] = -1;
     }
     received_messages = 0;
-    expected_messages = NUM_PROC - 1;
-    max_time = -1;
 
     for(int i = 0; i < 9; i++){
         room_av[i] = 0;
@@ -361,6 +357,7 @@ int main(int argc, char **argv)
                 // printf("%d Send\n", rank);
                 send_to_all(); // wysyłamy wiadomość do wszystkich
                 pthread_cond_wait(&cond0, &lock0);
+                printf("%d : max time: %d\n", rank, max_time);
                 timer = max_time + 1;
                 change_state(1);
                 break;
