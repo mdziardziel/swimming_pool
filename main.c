@@ -58,22 +58,17 @@ int better_priority(int r_rank, int r_timer, int r_prev_state){
 
 void *wait_for_message(void *arguments){
     while(1){
-        // sleep(1);
         MPI_Status status;
-        // printf("receive\n");
         MPI_Recv(msg, MSG_SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
         int received_message_state = msg[0];
-        // printf("%d: ODBIERAM od %d [SEKCJA_LOKALNA?, CZAS] %d, %d\n", rank, sender, msg[0], msg[1]);
-        //printf("%d: Otrzymalem token: %d, %d od %d\n", rank, msg[0], msg[1], status.MPI_SOURCE);
-        
         int received_time;
         int r_timer;
         int r_previous_state;
-        
 
         switch (state) {
-        case 0: //sekcja 
+        case 0:
+            // sekcja lokalna
             switch(received_message_state){
                 // wiadomości z liczbą ostatnią cyfrą == 1 (np 21) -> wiadomość pytanie
                 // wiadomości z liczbą ostatnią cyfrą == 0 (np 20) -> wiadomość odpowiedź
@@ -81,7 +76,6 @@ void *wait_for_message(void *arguments){
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     if(received_messages == proc_num - 1){
                         pthread_cond_signal(&cond0);
-                        // printf("%d: ODBLOKOWAŁEM P0 \n", rank);
                         received_messages = 0;
                     }
                 break;
@@ -93,8 +87,6 @@ void *wait_for_message(void *arguments){
                     msg[0] = 0;
                     msg[1] = timer;
                     MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
-                    // printf("%d: Wysylam POTWIERDZENIE do %d ->> %d, %d\n", rank, sender, msg[0], msg[1]);
-
                 break;
                 case 11:
                     msg[0] = 10;
@@ -110,7 +102,7 @@ void *wait_for_message(void *arguments){
             }
             break;
         case 1:
-            // printf("P1\n");//P1
+            // P1
             switch(received_message_state){
                 case 1:
                     msg[0] = 0;
@@ -118,7 +110,6 @@ void *wait_for_message(void *arguments){
                     MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
                     break;
                 case 11:
-                    // received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     r_timer = msg[1];
                     r_previous_state = msg[2];
 
@@ -126,19 +117,15 @@ void *wait_for_message(void *arguments){
                         // kolejkujemy odebraną wiadomość do późniejszego odesłania
                         mes_queue[mes_queue_indx] = sender;
                         mes_queue_indx++;
-                        // printf("%d: LEPSZY OD %d\n", rank, sender);
                     } else {
                         msg[0] = 10;
-                        // printf("%d: GORSZY OD %d\n", rank, sender);
                         MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
                     }
                     break;
                 case 10:
-                    // printf("%d: POWIEKSZYLEM RANK OD %d\n", rank, sender);
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     if(received_messages == proc_num - 1){
                         pthread_cond_signal(&cond0);
-                        // printf("%d: ODBLOKOWAŁEM P1 \n", rank);
                         received_messages = 0;
                     }
                     break;
@@ -152,28 +139,26 @@ void *wait_for_message(void *arguments){
             }
             break;
         case 2:
+            // P2
             case 20:
             received_messages++;
             increment_rooms();
 
             if(received_messages == proc_num - 1){
                 pthread_cond_signal(&cond0);
-                // printf("%d: ODBLOKOWAŁEM P2 \n", rank);
                 received_messages = 0;
             }
-            // printf("P2 %d\n", rank);//P2
             break;
         case 3:
-            // printf("Szatnia\n");//szatnia
+            // szatnia
             break;
         case 4:
-            // printf("basen\n");//basen
+            //basen
             break;
         default:
-            // printf("warning\n");
+            printf("warning\n");
             break;
         }
-        //MPI_Send( msg, MSG_SIZE, MPI_INT, receiver, MSG_HELLO, MPI_COMM_WORLD );
     }
 }
 
@@ -181,24 +166,17 @@ void increment_rooms(){
     if(msg[1] >= 0){// czy jest w szatni
         if(msg[3] == 0){ // czy jest kobietą
             room_av[msg[2]]++;
-            // printf("%d: KOBIETA W SZATNI %d\n", rank, msg[2]);
         } else { //jest mężczyzną
-            // printf("%d: MĘŻCZYNZA W SZATNI %d\n", rank, msg[2]);
             room_av[msg[2] + 1]++;
         }
     } else if(msg[2] >= 0) { // jeśli jest poza szatnią, ale ma zajętą szafke
-        // printf("%d: SZAFKA ZAJĘTA W SZATNI %d\n", rank, msg[2]);
         room_av[msg[2] + 2]++;
     }
-    // printf("%d: POZA SZATNIĄ\n", rank);
 }
-
-// void config_state(int )
 
 void init(int rank){
     timer = rank;
     male = rand() % 2;
-    // printf("male: %d, time: %d\n", male, timer);
 }
 
 void other_stuff(){
@@ -210,19 +188,28 @@ void send_to_all(){
     for(int i = 0; i < NUM_PROC; i++) {
         if(i == rank) continue;
         MPI_Send( msg, MSG_SIZE, MPI_INT, i, 100, MPI_COMM_WORLD );
-        // printf("%d: Wysylam do %d ->> %d, %d, %d\n", rank, i, msg[0], msg[1], msg[2]);
     }
 }
 
 void reset_global_variables(){
+    //reset msg
+    for(int i = 0; i < MSG_SIZE; i++){
+        msg[i] = -1;
+    }
+    received_messages = 0;
+    expected_messages = NUM_PROC - 1;
+    max_time = -1;
 
+    for(int i = 0; i < 3 * 3; i++){
+        room_av[i] = 0;
+    }
 }
 
 void change_state(int new_state){
-    reset_global_variables();
     printf("%d: Zmieniam stan z %d na %d, [szatnia: %d, płeć: %d]\n", rank, state, new_state, my_room, male);
     previous_state = state;
     state = new_state;
+    reset_global_variables();
 }
 
 int available_room() {
@@ -261,8 +248,7 @@ int main(int argc, char **argv)
 
     while(1){
     switch (state) {
-        case 0: //sekcja 
-            // printf("sekcja lokalna\n");
+        case 0: //sekcja lokalna
             other_stuff();
             msg[0] = 1;
             msg[1] = timer;
@@ -271,42 +257,33 @@ int main(int argc, char **argv)
             timer = max_time + 1;
             change_state(1);
             break;
-        case 1:
-            // printf("P1 %d\n", rank);//P1
+        case 1: // P1
             msg[0] = 11;
             msg[1] = timer;
             msg[2] = previous_state;
             send_to_all();
             pthread_cond_wait(&cond0, &lock0);
-            // printf("%d: ODBLOKOWANY P1 \n", rank);
             change_state(2);
             break;
-        case 2:
-            // printf("P2 %d\n", rank);//P2
+        case 2: // P2
             msg[0] = 21;
             send_to_all();
             pthread_cond_wait(&cond0, &lock0);
-            // printf("%d: ODBLOKOWANY P2\n", rank);
             my_room = available_room();
-            // printf("%d: MOJA SZATNIA %d\n", rank, my_room);
             if(my_room > -1){ 
                 change_state(3);
             } else {
                 change_state(1);
             }
             break;
-        case 3:
-            // printf("Szatnia %d\n", rank);//szatnia
+        case 3: // szatnia
             sleep(1000);
             break;
-        case 4:
-            // printf("basen\n");//basen
+        case 4: // basen
             break;
         default:
-            // printf("warning\n");
             break;
         }
-        //MPI_Send( msg, MSG_SIZE, MPI_INT, receiver, MSG_HELLO, MPI_COMM_WORLD );
     }
 
     pthread_kill(threads[0], NULL);
