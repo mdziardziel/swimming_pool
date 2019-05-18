@@ -147,7 +147,6 @@ void *wait_for_message(void *arguments){
                 break;  
                 default:
                     exit_with_error("ERROR R case 1\n");
-    
                 break;
             }
             break;
@@ -164,7 +163,7 @@ void *wait_for_message(void *arguments){
                     break;
                 case 20:
                     received_messages++;
-                    printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
+                    // printf("%d Received: sender %d, msg0 %d, w szatni %d, szatnia %d, plec %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3]);
                     increment_rooms();
     
                     if(received_messages == proc_num - 1){
@@ -255,6 +254,7 @@ void send_case_11(int send_to){
 void increment_rooms(){
     if(msg[1] > 0){// czy jest w szatni
         room_av[msg[2] + male]++; // zwiększamy licznik danej płci w szatni
+        room_av[msg[2] + 2]++; // zajmuje szafke
     } else if(msg[2] >= 0) { // jeśli jest poza szatnią, ale ma zajętą szafke
         room_av[msg[2] + 2]++;
     }
