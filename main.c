@@ -253,7 +253,7 @@ void send_case_11(int send_to){
 }
 
 void increment_rooms(){
-    if(msg[1] >= 0){// czy jest w szatni
+    if(msg[1] > 0){// czy jest w szatni
         room_av[msg[2] + male]++; // zwiększamy licznik danej płci w szatni
     } else if(msg[2] >= 0) { // jeśli jest poza szatnią, ale ma zajętą szafke
         room_av[msg[2] + 2]++;
