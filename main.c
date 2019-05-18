@@ -215,14 +215,24 @@ void send_to_all(){
 }
 
 void reset_global_variables(){
+    //reset msg
+    for(int i = 0; i < MSG_SIZE; i++){
+        msg[i] = -1;
+    }
+    received_messages = 0;
+    expected_messages = NUM_PROC - 1;
+    max_time = -1;
 
+    for(int i = 0; i < 3 * 3; i++){
+        room_av[i] = 0;
+    }
 }
 
 void change_state(int new_state){
-    reset_global_variables();
     printf("%d: Zmieniam stan z %d na %d, [szatnia: %d, płeć: %d]\n", rank, state, new_state, my_room, male);
     previous_state = state;
     state = new_state;
+    reset_global_variables();
 }
 
 int available_room() {
