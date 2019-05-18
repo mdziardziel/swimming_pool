@@ -10,7 +10,7 @@
 #define MSG_HELLO 100
 
 int msg[MSG_SIZE];
-int male;
+int male = -1;
 int state = 0;
 int previous_state;
 int room = -1;
@@ -31,6 +31,12 @@ int my_room = -1;
 
 pthread_mutex_t	lock0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER; 
+
+int own_rand(int start, int end){
+    int rnd = rand();
+    int range = end-start;
+    return start + (rnd%range);
+}
 
 int better_priority(int r_rank, int r_timer, int r_prev_state){
     if(r_prev_state == 4){ // 4 - stan basen
@@ -58,9 +64,11 @@ int better_priority(int r_rank, int r_timer, int r_prev_state){
 
 void *wait_for_message(void *arguments){
     while(1){
+        sleep(0.001);
         MPI_Status status;
         MPI_Recv(msg, MSG_SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
+        // printf("%d Received: sender %d, msg0 %d, state %d\n", rank, sender, msg[0], state);
         int received_message_state = msg[0];
         int received_time;
         int r_timer;
@@ -87,8 +95,8 @@ void *wait_for_message(void *arguments){
                     send_case_1(sender);
                     break;
                 case 11:
-                    msg[0] = 10;
-                    MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
+                    // printf("%d\n", msg[0]);
+                    send_case_11(sender);
                 break;
                 case 21:
                     send_case_21(sender);
@@ -108,14 +116,15 @@ void *wait_for_message(void *arguments){
                     if(better_priority(sender, r_timer, r_previous_state)){
                         // kolejkujemy odebraną wiadomość do późniejszego odesłania
                         mes_queue[mes_queue_indx] = sender;
+                        // printf("%d kolejkuje %d\n", rank, sender);
                         mes_queue_indx++;
                     } else {
-                        msg[0] = 10;
-                        MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
+                        send_case_11(sender);
                     }
                     break;
                 case 10:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
+                    // printf("%d dostaje %d\n", rank, sender);
                     if(received_messages == proc_num - 1){
                         pthread_cond_signal(&cond0);
                         received_messages = 0;
@@ -132,17 +141,22 @@ void *wait_for_message(void *arguments){
                 case 1:
                     send_case_1(sender);
                     break;
+                case 11:
+                    mes_queue[mes_queue_indx] = sender;
+                    // printf("%d kolejkuje %d\n", rank, sender);
+                    mes_queue_indx++;
+                    break;
                 case 20:
-                received_messages++;
-                increment_rooms();
+                    received_messages++;
+                    increment_rooms();
     
-                if(received_messages == proc_num - 1){
-                    pthread_cond_signal(&cond0);
-                    received_messages = 0;
-                }
-                break;
+                    if(received_messages == proc_num - 1){
+                        pthread_cond_signal(&cond0);
+                        received_messages = 0;
+                    }
+                    break;
                 case 21:
-                    send_case_21(sender);
+                    printf("ERROR!\n");
                 break;  
             }
             break;
@@ -151,6 +165,9 @@ void *wait_for_message(void *arguments){
             switch(received_message_state){
                 case 1:
                     send_case_1(sender);
+                    break;
+                case 11:
+                    send_case_11(sender);
                     break;
                 case 21:
                     send_case_21(sender);
@@ -163,13 +180,16 @@ void *wait_for_message(void *arguments){
                 case 1:
                     send_case_1(sender);
                     break;
+                case 11:
+                    send_case_11(sender);
+                    break;
                 case 21:
                     send_case_21(sender);
                 break;  
             }
             break;
         default:
-            printf("warning\n");
+            printf("ERROR\n");
             break;
         }
     }
@@ -184,13 +204,23 @@ void send_case_21(int send_to){
     }
     msg[2] = my_room;
     msg[3] = male;
-    MPI_Send(msg, MSG_SIZE, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD );
+    send_msg(send_to);
+}
+
+void send_msg(int send_to){
+    // printf("%d Send: to %d msg0 %d\n", rank, send_to, msg[0]);
+    MPI_Send(msg, MSG_SIZE, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD);
 }
 
 void send_case_1(int send_to){
     msg[0] = 0;
     msg[1] = timer;
-    MPI_Send(msg, MSG_SIZE, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD );
+    send_msg(send_to);
+}
+
+void send_case_11(int send_to){
+    msg[0] = 10;
+    send_msg(send_to);
 }
 
 void increment_rooms(){
@@ -207,18 +237,19 @@ void increment_rooms(){
 
 void init(int rank){
     timer = rank;
-    male = rand() % 2;
+    // male = own_rand(0, 2);
+    male = rank % 2;
 }
 
 void other_stuff(){
-    int sleep_time = (rand() % 100)/10;
-    sleep(sleep_time);
+    // sleep(own_rand(0,10));
+    sleep(1);
 }
 
 void send_to_all(){
     for(int i = 0; i < NUM_PROC; i++) {
         if(i == rank) continue;
-        MPI_Send( msg, MSG_SIZE, MPI_INT, i, 100, MPI_COMM_WORLD );
+        send_msg(i);
     }
 }
 
@@ -257,8 +288,9 @@ int available_room() {
 void resend_queued_messages(){
     for(int i = 0; i < mes_queue_indx; i++ ){ // odsyłam każdemu komu nie odpowiedziałem
         msg[0] = 10;
-        MPI_Send(msg, MSG_SIZE, MPI_INT, mes_queue[i], MSG_HELLO, MPI_COMM_WORLD );
-        printf("%d: ods %d\n", rank, mes_queue[i]);
+        // printf("%d resend %d\n", rank, mes_queue[i]);
+        send_msg(mes_queue[i]);
+        // printf("%d: ods %d\n", rank, mes_queue[i]);
         mes_queue[i] = -1;
     }
     mes_queue_indx = 0;
@@ -266,12 +298,11 @@ void resend_queued_messages(){
 
 int main(int argc, char **argv)
 {
-    srand(time(NULL));
+    srand(rank);
 	MPI_Init(&argc, &argv);
 
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
-    printf("%d: Zaczynam od stanu %d, [szatnia: %d, płeć: %d]\n", rank, state, my_room, male);
     init(rank);
 
 
@@ -287,6 +318,8 @@ int main(int argc, char **argv)
     assert(!result_code);
 // #####
 
+    printf("%d: Zaczynam od stanu %d, [szatnia: %d, płeć: %d]\n", rank, state, my_room, male);
+
     while(1){
     switch (state) {
         case 0: //sekcja lokalna
@@ -299,10 +332,13 @@ int main(int argc, char **argv)
             change_state(1);
             break;
         case 1: // P1
+            // sleep(1);
             msg[0] = 11;
             msg[1] = timer;
             msg[2] = previous_state;
+            // printf("%d wysyłam ALL\n", rank);
             send_to_all();
+            // sleep(1);
             pthread_cond_wait(&cond0, &lock0);
             change_state(2);
             break;
@@ -319,9 +355,11 @@ int main(int argc, char **argv)
             break;
         case 3: // szatnia
             resend_queued_messages();
-            sleep(1000);
+            other_stuff();
+            change_state(4);
             break;
         case 4: // basen
+            sleep(10000);
             break;
         default:
             break;
