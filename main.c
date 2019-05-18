@@ -203,7 +203,7 @@ void change_state(int new_state){
 }
 
 int is_room_available() {
-
+  //
 }
 
 int main(int argc, char **argv)
