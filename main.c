@@ -23,6 +23,8 @@ int max_time = -1;
 int mes_queue[NUM_PROC];
 int mes_queue_indx = 0;
 int room_av[9] = {0};
+int room_capacity = 2;
+int my_room = -1;
     // n - kobiety w ntej szatni (np room_av[0], room_av[3], room_av[6])
     // n + 1 - mężczyźni w ntej szatni (np room_av[1], room_av[4], room_av[7])
     // n + 2 - liczba zajętych szafek w ntej szatni (np room_av[2], room_av[5], room_av[8])
@@ -217,8 +219,15 @@ void change_state(int new_state){
     state = new_state;
 }
 
-int is_room_available() {
-  return 1;
+int available_room() {
+    for(int i = 0; i < 3; i++){ // dla każdej sztani
+        if(room_av[3*i + 2] < room_capacity && room_av[3*i + 1 - male] == 0) return i;
+        // sprawdzam czy jest jakaś wolna szafka
+        // oraz czy w danej szatni jest aktualnie osoba przeciwnej płci
+        // jeśli tak to zwracam numer tej szatni
+    }
+    // jeśli nie znajdzie szatni to zwracam -1
+    return -1;
 }
 
 int main(int argc, char **argv)
@@ -272,7 +281,9 @@ int main(int argc, char **argv)
             send_to_all();
             pthread_cond_wait(&cond0, &lock0);
             printf("%d: ODBLOKOWANY P2\n", rank);
-            if(is_room_available()){
+            my_room = available_room();
+            printf("%d: MOJA SZATNIA %d\n", rank, my_room);
+            if(my_room > -1){ 
                 change_state(3);
             } else {
                 change_state(1);
