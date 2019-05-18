@@ -82,7 +82,7 @@ void *wait_for_message(void *arguments){
                 // wiadomości z liczbą ostatnią cyfrą == 0 (np 20) -> wiadomość odpowiedź
                 case 0:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
-                    printf("%d: received %d messages\n", rank, received_messages);
+                    // printf("%d: received %d messages\n", rank, received_messages);
                     if(received_messages == proc_num - 1){
                         pthread_cond_signal(&cond0);
                         received_messages = 0;
@@ -101,6 +101,9 @@ void *wait_for_message(void *arguments){
                 break;
                 case 21:
                     send_case_21(sender);
+                break;
+                default:
+                    printf("ERROR R case 0\n");
                 break;
             }
             break;
@@ -134,6 +137,9 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                default:
+                    printf("ERROR R case 1\n");
+                break;
             }
             break;
         case 2:
@@ -157,8 +163,11 @@ void *wait_for_message(void *arguments){
                     }
                     break;
                 case 21:
-                    printf("ERROR!\n");
+                    printf("ERROR! Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                 break;  
+                default:
+                    printf("ERROR R case 2\n");
+                break;
             }
             break;
         case 3:
@@ -173,6 +182,9 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                default:
+                    printf("ERROR R case 3\n");
+                break;
             }
             break;
         case 4:
@@ -187,10 +199,13 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                default:
+                    printf("ERROR R case 4\n");
+                break;
             }
             break;
         default:
-            printf("ERROR\n");
+            printf("ERROR Receive\n");
             break;
         }
     }
@@ -324,7 +339,7 @@ int main(int argc, char **argv)
     while(1){
     switch (state) {
         case 0: //sekcja lokalna
-            other_stuff();
+            sleep(timer%4);
             msg[0] = 1;
             msg[1] = timer;
             printf("%d Send\n", rank);
@@ -357,14 +372,20 @@ int main(int argc, char **argv)
             break;
         case 3: // szatnia
             resend_queued_messages();
-            other_stuff();
-            change_state(4);
+            sleep(timer%4);
+            if(previous_state == 2){
+                change_state(4);
+            } else {
+                change_state(0);
+            }
             break;
         case 4: // basen
-            sleep(10000);
+            sleep(timer%4);
+            change_state(1);
             break;
         default:
-            break;
+            printf("ERROR Send\n");
+        break;
         }
     }
 
