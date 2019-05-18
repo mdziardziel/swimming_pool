@@ -20,7 +20,7 @@ int expected_messages = NUM_PROC - 1;
 int rank;
 int proc_num = 4;
 int max_time = -1;
-int mes_queue[NUM_PROC];
+int mes_queue[NUM_PROC] = {-1};
 int mes_queue_indx = 0;
 int room_av[9] = {0};
 int room_capacity = 2;
@@ -84,20 +84,14 @@ void *wait_for_message(void *arguments){
                     if(received_time > max_time)
                         max_time = received_time;
 
-                    msg[0] = 0;
-                    msg[1] = timer;
-                    MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
-                break;
+                    send_case_1(sender);
+                    break;
                 case 11:
                     msg[0] = 10;
                     MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
                 break;
                 case 21:
-                    msg[0] = 20;
-                    msg[1] = -1;
-                    msg[2] = -1;
-                    msg[3] = male;
-                    MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
+                    send_case_21(sender);
                 break;
             }
             break;
@@ -105,9 +99,7 @@ void *wait_for_message(void *arguments){
             // P1
             switch(received_message_state){
                 case 1:
-                    msg[0] = 0;
-                    msg[1] = timer;
-                    MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
+                    send_case_1(sender);
                     break;
                 case 11:
                     r_timer = msg[1];
@@ -130,36 +122,75 @@ void *wait_for_message(void *arguments){
                     }
                     break;
                 case 21:
-                    msg[0] = 20;
-                    msg[1] = -1;
-                    msg[2] = -1;
-                    msg[3] = male;
-                    MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
+                    send_case_21(sender);
                 break;  
             }
             break;
         case 2:
             // P2
-            case 20:
-            received_messages++;
-            increment_rooms();
-
-            if(received_messages == proc_num - 1){
-                pthread_cond_signal(&cond0);
-                received_messages = 0;
+            switch(received_message_state){
+                case 1:
+                    send_case_1(sender);
+                    break;
+                case 20:
+                received_messages++;
+                increment_rooms();
+    
+                if(received_messages == proc_num - 1){
+                    pthread_cond_signal(&cond0);
+                    received_messages = 0;
+                }
+                break;
+                case 21:
+                    send_case_21(sender);
+                break;  
             }
             break;
         case 3:
             // szatnia
+            switch(received_message_state){
+                case 1:
+                    send_case_1(sender);
+                    break;
+                case 21:
+                    send_case_21(sender);
+                break;  
+            }
             break;
         case 4:
             //basen
+            switch(received_message_state){
+                case 1:
+                    send_case_1(sender);
+                    break;
+                case 21:
+                    send_case_21(sender);
+                break;  
+            }
             break;
         default:
             printf("warning\n");
             break;
         }
     }
+}
+
+void send_case_21(int send_to){
+    msg[0] = 20;
+    if(state == 3){
+        msg[1] = 1;
+    } else {
+        msg[1] = 0;
+    }
+    msg[2] = my_room;
+    msg[3] = male;
+    MPI_Send(msg, MSG_SIZE, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD );
+}
+
+void send_case_1(int send_to){
+    msg[0] = 0;
+    msg[1] = timer;
+    MPI_Send(msg, MSG_SIZE, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD );
 }
 
 void increment_rooms(){
@@ -180,7 +211,7 @@ void init(int rank){
 }
 
 void other_stuff(){
-    int sleep_time = rand() % 10;
+    int sleep_time = (rand() % 100)/10;
     sleep(sleep_time);
 }
 
@@ -206,7 +237,7 @@ void reset_global_variables(){
 }
 
 void change_state(int new_state){
-    printf("%d: Zmieniam stan z %d na %d, [szatnia: %d, płeć: %d]\n", rank, state, new_state, my_room, male);
+    printf("%d: Zmieniam stan z %d na %d, [szatnia: %d, płeć: %d, timer: %d]\n", rank, state, new_state, my_room, male, timer);
     previous_state = state;
     state = new_state;
     reset_global_variables();
@@ -221,6 +252,16 @@ int available_room() {
     }
     // jeśli nie znajdzie szatni to zwracam -1
     return -1;
+}
+
+void resend_queued_messages(){
+    for(int i = 0; i < mes_queue_indx; i++ ){ // odsyłam każdemu komu nie odpowiedziałem
+        msg[0] = 10;
+        MPI_Send(msg, MSG_SIZE, MPI_INT, mes_queue[i], MSG_HELLO, MPI_COMM_WORLD );
+        printf("%d: ods %d\n", rank, mes_queue[i]);
+        mes_queue[i] = -1;
+    }
+    mes_queue_indx = 0;
 }
 
 int main(int argc, char **argv)
@@ -277,6 +318,7 @@ int main(int argc, char **argv)
             }
             break;
         case 3: // szatnia
+            resend_queued_messages();
             sleep(1000);
             break;
         case 4: // basen
