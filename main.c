@@ -29,6 +29,7 @@ int my_room = -1;
     // n + 1 - mężczyźni w ntej szatni (np room_av[1], room_av[4], room_av[7])
     // n + 2 - liczba zajętych szafek w ntej szatni (np room_av[2], room_av[5], room_av[8])
 int visited_pool_num = 0;
+int was_on_pool = -1;
 
 pthread_mutex_t	lock0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER; 
@@ -357,7 +358,7 @@ int main(int argc, char **argv)
                 // printf("%d Send\n", rank);
                 send_to_all(); // wysyłamy wiadomość do wszystkich
                 pthread_cond_wait(&cond0, &lock0);
-                printf("%d : max time: %d\n", rank, max_time);
+                // printf("%d : max time: %d\n", rank, max_time);
                 timer = max_time + 1;
                 change_state(1);
                 break;
@@ -386,16 +387,18 @@ int main(int argc, char **argv)
             case 3: // szatnia
                 resend_queued_messages();
                 sleep(timer%4 + 1);
-                if(previous_state == 2){
+                if(was_on_pool == -1){
                     change_state(4);
                 } else {
                     my_room = -1;
+                    was_on_pool = -1;
                     change_state(0);
                 }
                 break;
             case 4: // basen
                 sleep(timer%4 + 1);
                 visited_pool_num++;
+                was_on_pool = 1;
                 change_state(1);
                 break;
             default:
