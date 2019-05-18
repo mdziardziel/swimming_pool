@@ -77,7 +77,7 @@ void *wait_for_message(void *arguments){
         MPI_Status status;
         MPI_Recv(msg, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
-        // printf("%d Received: sender %d, msg0 %d, msg1 %d, msg2 %d, msg3 %d, state %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3], state);
+        printf("%d Received: sender %d, msg0 %d, msg1 %d, msg2 %d, msg3 %d, state %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3], state);
         int received_message_state = msg[0];
         int received_time;
         int r_timer;
@@ -109,6 +109,8 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;
+                case 30:
+                    break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 0\n");
@@ -135,9 +137,10 @@ void *wait_for_message(void *arguments){
                     if(better_priority(sender, r_timer, r_previous_state) || messages_sent[sender] == 0){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
                         // kolejkujemy odebraną wiadomość do późniejszego odesłania
                         mes_queue[mes_queue_indx] = sender;
-                        // printf("%d kolejkuje %d\n", rank, sender);
+                        printf("%d kolejkuje %d\n", rank, sender);
                         mes_queue_indx++;
                     } else {
+                        printf("%d: Lepsze %d\n", rank, sender);
                         send_case_11(sender);
                     }
                     break;
@@ -153,7 +156,9 @@ void *wait_for_message(void *arguments){
                     break;
                 case 21:
                     send_case_21(sender);
-                break;  
+                break;
+                case 30:
+                    break;  
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 1\n");
@@ -184,7 +189,11 @@ void *wait_for_message(void *arguments){
                 case 21:
                     printf("%d: sender %d\n", rank, sender);
                     exit_with_error("ERROR! Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
-                break;  
+                    break;  
+                case 30:
+                    decrement_rooms(msg[1], msg[2], msg[3]);
+                    if(available_room() > -1) pthread_cond_signal(&cond0);
+                    break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 2\n");
@@ -204,6 +213,8 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                case 30:
+                    break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 3\n");
@@ -222,6 +233,8 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                case 30:
+                    break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 4\n");
@@ -264,6 +277,15 @@ void increment_rooms(int m1, int m2, int m3){
         room_av[3 * m2 + 2]++; // zajmuje szafke
     } else if(m2 >= 0) { // jeśli jest poza szatnią, ale ma zajętą szafke
         room_av[3 * m2 + 2]++;
+    }
+}
+
+void decrement_rooms(int m1, int m2, int m3){
+    if(m1 == 1){// był na basenie, to znaczy, że może zwolnić szafke
+        room_av[3 * m2 + m3]--; // zmniejszamy licznik danej płci w szatni
+        room_av[3 * m2 + 2]--; // zwalnia szafke
+    } else if(m2 >= 0) { // nie idzie na basen to nie zwalnia szafki, tylko licznik danej płci w szatni
+        room_av[3 * m2 + m3]--; // zmniejszamy licznik danej płci w szatni
     }
 }
 
@@ -379,21 +401,24 @@ int main(int argc, char **argv)
                 change_state(2);
                 break;
             case 2: // P2
-                send_to_all(21, -1, -1, -1);
-                pthread_cond_wait(&cond0, &lock0);
+                send_to_all(21, -1, -1, -1); //pytamy o to kto w jakiej szatni
+                pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
                 my_room = available_room();
-                if(my_room > -1){ 
-                    change_state(3);
-                } else {
-                    change_state(1);
+                if(my_room == -1) {
+                    pthread_cond_wait(&cond0, &lock0); // blokujemy i czekamy aż się zwolni miejsce
+                    my_room = available_room();
+                    if(my_room == -1)  exit_with_error("ERROR Wybrano pokój -1\n");
                 }
+                change_state(3);
                 break;
             case 3: // szatnia
                 resend_queued_messages();
                 sleep(timer%4 + 1);
                 if(was_on_pool == -1){
+                    send_to_all(30, 0, my_room, male); // 32, czy był na basenie, nr szatni, plec
                     change_state(4);
                 } else {
+                    send_to_all(30, 1, my_room, male); // 32, czy był na basenie, nr szatni, plec
                     my_room = -1;
                     was_on_pool = -1;
                     change_state(0);
