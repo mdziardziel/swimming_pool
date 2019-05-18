@@ -75,7 +75,7 @@ void *wait_for_message(void *arguments){
         MPI_Status status;
         MPI_Recv(msg, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
-        // printf("%d Received: sender %d, msg0 %d, msg1 %d, msg2 %d, msg3 %d, state %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3], state);
+        printf("%d Received: sender %d, msg0 %d, msg1 %d, msg2 %d, msg3 %d, state %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3], state);
         int received_message_state = msg[0];
         int received_time;
         int r_timer;
@@ -129,9 +129,10 @@ void *wait_for_message(void *arguments){
                     if(better_priority(sender, r_timer, r_previous_state)){
                         // kolejkujemy odebraną wiadomość do późniejszego odesłania
                         mes_queue[mes_queue_indx] = sender;
-                        // printf("%d kolejkuje %d\n", rank, sender);
+                        printf("%d kolejkuje %d\n", rank, sender);
                         mes_queue_indx++;
                     } else {
+                        printf("%d: Lepsze %d\n", rank, sender);
                         send_case_11(sender);
                     }
                     break;
