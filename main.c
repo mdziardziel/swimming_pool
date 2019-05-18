@@ -172,6 +172,7 @@ void *wait_for_message(void *arguments){
                     }
                     break;
                 case 21:
+                    printf("%d: sender %d\n", rank, sender);
                     exit_with_error("ERROR! Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                 break;  
                 default:
