@@ -23,7 +23,9 @@ int max_time = -1;
 int mes_queue[NUM_PROC];
 int mes_queue_indx = 0;
 int room_av[9] = {0};
-
+    // n - kobiety w ntej szatni (np room_av[0], room_av[3], room_av[6])
+    // n + 1 - mężczyźni w ntej szatni (np room_av[1], room_av[4], room_av[7])
+    // n + 2 - liczba zajętych szafek w ntej szatni (np room_av[2], room_av[5], room_av[8])
 
 pthread_mutex_t	lock0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER; 
@@ -54,7 +56,7 @@ int better_priority(int r_rank, int r_timer, int r_prev_state){
 
 void *wait_for_message(void *arguments){
     while(1){
-        sleep(1);
+        // sleep(1);
         MPI_Status status;
         // printf("receive\n");
         MPI_Recv(msg, MSG_SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -67,9 +69,12 @@ void *wait_for_message(void *arguments){
         int r_timer;
         int r_previous_state;
         
+
         switch (state) {
         case 0: //sekcja 
             switch(received_message_state){
+                // wiadomości z liczbą ostatnią cyfrą == 1 (np 21) -> wiadomość pytanie
+                // wiadomości z liczbą ostatnią cyfrą == 0 (np 20) -> wiadomość odpowiedź
                 case 0:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     if(received_messages == proc_num - 1){
@@ -96,7 +101,7 @@ void *wait_for_message(void *arguments){
                 case 21:
                     msg[0] = 20;
                     msg[1] = -1;
-                    msg[2] = 0;
+                    msg[2] = -1;
                     msg[3] = male;
                     MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
                 break;
@@ -138,7 +143,7 @@ void *wait_for_message(void *arguments){
                 case 21:
                     msg[0] = 20;
                     msg[1] = -1;
-                    msg[2] = 0;
+                    msg[2] = -1;
                     msg[3] = male;
                     MPI_Send(msg, MSG_SIZE, MPI_INT, sender, MSG_HELLO, MPI_COMM_WORLD );
                 break;  
@@ -147,13 +152,7 @@ void *wait_for_message(void *arguments){
         case 2:
             case 20:
             received_messages++;
-            if(msg[1] != -1){//czy jes t w szatni
-                if(msg[3] == 0){
-                
-                } else {
-
-                }
-            }
+            increment_rooms();
 
             if(received_messages == proc_num - 1){
                 pthread_cond_signal(&cond0);
@@ -174,6 +173,22 @@ void *wait_for_message(void *arguments){
         }
         //MPI_Send( msg, MSG_SIZE, MPI_INT, receiver, MSG_HELLO, MPI_COMM_WORLD );
     }
+}
+
+void increment_rooms(){
+    if(msg[1] >= 0){// czy jest w szatni
+        if(msg[3] == 0){ // czy jest kobietą
+            room_av[msg[2]]++;
+            printf("%d: KOBIETA W SZATNI %d\n", rank, msg[2]);
+        } else { //jest mężczyzną
+            printf("%d: MĘŻCZYNZA W SZATNI %d\n", rank, msg[2]);
+            room_av[msg[2] + 1]++;
+        }
+    } else if(msg[2] >= 0) { // jeśli jest poza szatnią, ale ma zajętą szafke
+        printf("%d: SZAFKA ZAJĘTA W SZATNI %d\n", rank, msg[2]);
+        room_av[msg[2] + 2]++;
+    }
+    printf("%d: POZA SZATNIĄ\n", rank);
 }
 
 // void config_state(int )
@@ -203,7 +218,7 @@ void change_state(int new_state){
 }
 
 int is_room_available() {
-  //
+  return 1;
 }
 
 int main(int argc, char **argv)
@@ -265,6 +280,7 @@ int main(int argc, char **argv)
             break;
         case 3:
             printf("Szatnia %d\n", rank);//szatnia
+            sleep(100);
             break;
         case 4:
             printf("basen\n");//basen
