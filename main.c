@@ -34,6 +34,9 @@ int additional_messages = 0;
 pthread_mutex_t	lock0 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER; 
 
+pthread_mutex_t	lock1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER; 
+
 int own_rand(int start, int end){
     int rnd = rand();
     int range = end-start;
@@ -128,19 +131,18 @@ void *wait_for_message(void *arguments){
                     r_previous_state = msg[2];
 
                     // printf("%d: Sender %d\n", rank, sender);
-                    if(messages_sent[sender] == 1 && (r_previous_state == 4) ){ // jeśli nie dostaliśmy odpowiedzi, a poprzedni stan to basen
+                    if(!better_priority(sender, r_timer, r_previous_state && messages_sent[sender] > -1)){ // jeśli ma lepszy priorytet i wysłaliśmmy mu już wiadomość
                         send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
                         additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
-                        break;
                     }
 
-                    if(better_priority(sender, r_timer, r_previous_state) || messages_sent[sender] == 0){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
+                    if(better_priority(sender, r_timer, r_previous_state)){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
                         // kolejkujemy odebraną wiadomość do późniejszego odesłania
                         mes_queue[mes_queue_indx] = sender;
-                        printf("%d kolejkuje %d\n", rank, sender);
+                        // printf("%d kolejkuje %d\n", rank, sender);
                         mes_queue_indx++;
                     } else {
-                        printf("%d: Lepsze %d\n", rank, sender);
+                        // printf("%d: Lepsze %d\n", rank, sender);
                         send_case_11(sender);
                     }
                     break;
@@ -172,9 +174,15 @@ void *wait_for_message(void *arguments){
                     send_case_1(sender);
                     break;
                 case 11:
-                    mes_queue[mes_queue_indx] = sender;
-                    // printf("%d kolejkuje %d\n", rank, sender);
-                    mes_queue_indx++;
+                    if(msg[2] == 4 && previous_state != 4) { // jeśli ktoś przychodzi z basenu to nie będziemy go blokować skoro nie możemy wejść
+                        send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
+                        additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
+                        pthread_cond_signal(&cond1); //zwalniamy blokade
+                    } else {
+                        mes_queue[mes_queue_indx] = sender;
+                        // printf("%d kolejkuje %d\n", rank, sender);
+                        mes_queue_indx++;
+                    }
                     break;
                 case 20:
                     received_messages++;
@@ -187,12 +195,12 @@ void *wait_for_message(void *arguments){
                     }
                     break;
                 case 21:
-                    printf("%d: sender %d\n", rank, sender);
-                    exit_with_error("ERROR! Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
+                    // printf("%d: sender %d\n", rank, sender);
+                    printf("Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                     break;  
                 case 30:
                     decrement_rooms(msg[1], msg[2], msg[3]);
-                    if(available_room() > -1) pthread_cond_signal(&cond0);
+                    if(available_room() > -1) pthread_cond_signal(&cond1);
                     break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
@@ -372,6 +380,7 @@ int main(int argc, char **argv)
     int thread_args[1];
     int result_code;
     int first_time = 1;
+    int tmp_room = -1;
 
     thread_args[0] = 0;
     result_code = pthread_create(&threads[0], NULL, wait_for_message, &thread_args[0]);
@@ -402,13 +411,15 @@ int main(int argc, char **argv)
                 break;
             case 2: // P2
                 send_to_all(21, -1, -1, -1); //pytamy o to kto w jakiej szatni
-                pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
-                my_room = available_room();
-                if(my_room == -1) {
-                    pthread_cond_wait(&cond0, &lock0); // blokujemy i czekamy aż się zwolni miejsce
-                    my_room = available_room();
-                    if(my_room == -1)  exit_with_error("ERROR Wybrano pokój -1\n");
+                while(tmp_room == -1) {
+                    pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
+                    tmp_room = available_room();
+                    if(tmp_room == -1){ // jeśli nie mamy wolnej szatni
+                        pthread_cond_wait(&cond1, &lock1); // blokujemy i czekamy aż się zwolni miejsce 
+                        tmp_room = available_room(); // powinno być większe od -1, chyba, że przyszedł ktoś z basenu
+                    }
                 }
+                my_room = tmp_room;
                 change_state(3);
                 break;
             case 3: // szatnia
