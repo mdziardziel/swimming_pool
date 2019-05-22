@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
-#define NUM_PROC 8
+#define NUM_PROC 20
 #define MSG_HELLO 100
 
 int male = -1;
@@ -80,7 +80,7 @@ void *wait_for_message(void *arguments){
         MPI_Status status;
         MPI_Recv(msg, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int sender = status.MPI_SOURCE;
-        printf("%d Received: sender %d, msg0 %d, msg1 %d, msg2 %d, msg3 %d, state %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3], state);
+        // printf("%d Received: sender %d, msg0 %d, msg1 %d, msg2 %d, msg3 %d, state %d\n", rank, sender, msg[0], msg[1], msg[2], msg[3], state);
         int received_message_state = msg[0];
         int received_time;
         int r_timer;
@@ -98,8 +98,8 @@ void *wait_for_message(void *arguments){
                     received_time = msg[1];
                     if(received_time > max_time) max_time = received_time;
                     if(received_messages == proc_num - 1){
-                        pthread_cond_signal(&cond0);
                         received_messages = 0;
+                        pthread_cond_signal(&cond0);
                     }
                 break;
                 case 1:
@@ -132,8 +132,9 @@ void *wait_for_message(void *arguments){
 
                     // printf("%d: Sender %d\n", rank, sender);
                     if(!better_priority(sender, r_timer, r_previous_state && messages_sent[sender] > -1)){ // jeśli ma lepszy priorytet i wysłaliśmmy mu już wiadomość
-                        send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
                         additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
+                        // printf("sdfsdfsfds\n");
+                        send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
                     }
 
                     if(better_priority(sender, r_timer, r_previous_state)){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
@@ -151,9 +152,9 @@ void *wait_for_message(void *arguments){
                     messages_sent[sender] = 0; // odznaczamy, że dostaliśmy wiadomość od tego procesu
                     // printf("%d dostaje %d\n", rank, sender);
                     if(received_messages == proc_num + additional_messages - 1){
-                        pthread_cond_signal(&cond0);
                         received_messages = 0;
                         additional_messages = 0;
+                        pthread_cond_signal(&cond0);
                     }
                     break;
                 case 21:
@@ -174,15 +175,15 @@ void *wait_for_message(void *arguments){
                     send_case_1(sender);
                     break;
                 case 11:
-                    if(msg[2] == 4 && previous_state != 4) { // jeśli ktoś przychodzi z basenu to nie będziemy go blokować skoro nie możemy wejść
-                        send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
-                        additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
-                        pthread_cond_signal(&cond1); //zwalniamy blokade
-                    } else {
+                    // if(msg[2] == 4 && previous_state != 4) { // jeśli ktoś przychodzi z basenu to nie będziemy go blokować skoro nie możemy wejść
+                    //     send_msg(sender,11, timer, previous_state, -1); // wysyłamy kolejną wiadomość
+                    //     additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
+                    //     pthread_cond_signal(&cond1); //zwalniamy blokade
+                    // } else {
                         mes_queue[mes_queue_indx] = sender;
                         // printf("%d kolejkuje %d\n", rank, sender);
                         mes_queue_indx++;
-                    }
+                    // }
                     break;
                 case 20:
                     received_messages++;
@@ -190,13 +191,13 @@ void *wait_for_message(void *arguments){
                     increment_rooms(msg[1], msg[2], msg[3]);
     
                     if(received_messages == proc_num - 1){
-                        pthread_cond_signal(&cond0);
                         received_messages = 0;
+                        pthread_cond_signal(&cond0);
                     }
                     break;
                 case 21:
                     // printf("%d: sender %d\n", rank, sender);
-                    printf("Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
+                    exit_with_error("Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                     break;  
                 case 30:
                     decrement_rooms(msg[1], msg[2], msg[3]);
@@ -411,15 +412,22 @@ int main(int argc, char **argv)
                 break;
             case 2: // P2
                 send_to_all(21, -1, -1, -1); //pytamy o to kto w jakiej szatni
-                while(tmp_room == -1) {
-                    pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
-                    tmp_room = available_room();
-                    if(tmp_room == -1){ // jeśli nie mamy wolnej szatni
-                        pthread_cond_wait(&cond1, &lock1); // blokujemy i czekamy aż się zwolni miejsce 
-                        tmp_room = available_room(); // powinno być większe od -1, chyba, że przyszedł ktoś z basenu
-                    }
-                }
-                my_room = tmp_room;
+                // while(tmp_room == -1) {
+                //     pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
+                //     tmp_room = available_room();
+                //     if(tmp_room == -1){ // jeśli nie mamy wolnej szatni
+                //         pthread_cond_wait(&cond1, &lock1); // blokujemy i czekamy aż się zwolni miejsce 
+                //         tmp_room = available_room(); // powinno być większe od -1, chyba, że przyszedł ktoś z basenu
+                //     }
+                // }
+                // my_room = tmp_room;
+                // tmp_room = -1;
+                pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
+                my_room = available_room();
+                if(my_room == -1){
+                    change_state(1);
+                    resend_queued_messages();
+                } 
                 change_state(3);
                 break;
             case 3: // szatnia
