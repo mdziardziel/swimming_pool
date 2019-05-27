@@ -150,7 +150,7 @@ void *wait_for_message(void *arguments){
                 break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
-                    exit_with_error("ERROR R case 0\n");
+                    printf("ERROR R case 0\n");
                 break;
             }
             break;
@@ -204,7 +204,7 @@ void *wait_for_message(void *arguments){
                 break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
-                    exit_with_error("ERROR R case 1\n");
+                    printf("ERROR R case 1\n");
                 break;
             }
             break;
@@ -247,14 +247,14 @@ void *wait_for_message(void *arguments){
                     break;
                 case 21:
                     // printf("%d: sender %d\n", rank, sender);
-                    exit_with_error("Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
+                    printf("Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                     break;  
                 case 30:
                     pthread_cond_signal(&cond3);
                 break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
-                    exit_with_error("ERROR R case 2\n");
+                    printf("ERROR R case 2\n");
     
                 break;
             }
@@ -275,7 +275,7 @@ void *wait_for_message(void *arguments){
                 break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
-                    exit_with_error("ERROR R case 3\n");
+                    printf("ERROR R case 3\n");
                 break;
             }
             break;
@@ -295,12 +295,12 @@ void *wait_for_message(void *arguments){
                 break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
-                    exit_with_error("ERROR R case 4\n");
+                    printf("ERROR R case 4\n");
                 break;
             }
             break;
         default:
-            exit_with_error("ERROR Receive\n");
+            printf("ERROR Receive\n");
             break;
         }
     }
@@ -357,8 +357,7 @@ void init(int rank){
 }
 
 void other_stuff(){
-    // sleep(own_rand(0,10));
-    sleep(1);
+    sleep((timer%4 + 1));
 }
 
 void send_to_all(int m0, int m1, int m2, int m3){
@@ -476,7 +475,7 @@ int main(int argc, char **argv)
         // sleep(1);
         switch (get_state()) {
             case 0: //sekcja lokalna
-                sleep(timer%4);
+                other_stuff();
                 // printf("%d Send\n", rank);
 
                 // printf("%d : max time: %d\n", rank, max_time);
@@ -526,7 +525,7 @@ int main(int argc, char **argv)
             case 3: // szatnia
                 resend_queued_messages_pool();
                 resend_queued_messages();
-                sleep(timer%4 + 1);
+                other_stuff();
                 if(was_on_pool == -1){
                     // send_to_all(30, 0, my_room, male); // 32, czy był na basenie, nr szatni, plec
                     change_state(4);
@@ -540,7 +539,7 @@ int main(int argc, char **argv)
                 }
                 break;
             case 4: // basen
-                sleep(timer%4 + 1);
+                other_stuff();
                 visited_pool_num++;
                 was_on_pool = 1;
                 change_state(1);
