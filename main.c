@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
-#define NUM_PROC 12
+#define NUM_PROC 8
 #define MSG_HELLO 100
 
 int male = -1;
@@ -25,7 +25,7 @@ int mes_queue_pool[NUM_PROC] = {-1};
 int mes_queue_indx_pool = 0;
 
 int room_av[9] = {0};
-int room_capacity = 2;
+int room_capacity = 1;
 int my_room = -1;
     // n - kobiety w ntej szatni (np room_av[0], room_av[3], room_av[6])
     // n + 1 - mężczyźni w ntej szatni (np room_av[1], room_av[4], room_av[7])
@@ -43,6 +43,9 @@ pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
 
 pthread_mutex_t	lock2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond2 = PTHREAD_COND_INITIALIZER; 
+
+pthread_mutex_t	lock3 = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond3 = PTHREAD_COND_INITIALIZER; 
 
 // pthread_mutex_t	lock_status = PTHREAD_MUTEX_INITIALIZER;
 // pthread_cond_t cond_status = PTHREAD_COND_INITIALIZER; 
@@ -137,6 +140,8 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;
+                case 30:
+                break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 0\n");
@@ -159,22 +164,25 @@ void *wait_for_message(void *arguments){
                         additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
                         // printf("sdfsdfsfds\n");
                         // printf("%d: ------- %d, timer: %d\n", rank, additional_messages, timer);
+                        printf("    %d odsyłam jeszcze raz %d\n", rank, sender);
                         send_msg(sender,11, timer, get_previous_state(), -1); // wysyłamy kolejną wiadomość
-                    }
+                    } 
+                        if(better_priority(sender, r_timer, r_previous_state)){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
+                            // kolejkujemy odebraną wiadomość do późniejszego odesłania
+                            mes_queue[mes_queue_indx] = sender;
+                            printf("    %d kolejkuje %d\n", rank, sender);
+                            mes_queue_indx++;
+                        } else {
+                            // printf("%d: Lepsze %d\n", rank, sender);
+                            send_case_11(sender);
+                        }
+                    
 
-                    if(better_priority(sender, r_timer, r_previous_state)){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
-                        // kolejkujemy odebraną wiadomość do późniejszego odesłania
-                        mes_queue[mes_queue_indx] = sender;
-                        // printf("%d kolejkuje %d\n", rank, sender);
-                        mes_queue_indx++;
-                    } else {
-                        // printf("%d: Lepsze %d\n", rank, sender);
-                        send_case_11(sender);
-                    }
                     break;
                 case 10:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     messages_sent[sender] = 0; // odznaczamy, że dostaliśmy wiadomość od tego procesu
+                    printf("    %d sender %d additional_messages: %d, received_messages: \n", rank, sender, additional_messages, received_messages);
                     if(received_messages == proc_num + additional_messages - 1){
 
                                             // printf("%d: ++++++++ %d\n", rank, additional_messages);
@@ -185,6 +193,8 @@ void *wait_for_message(void *arguments){
                     break;
                 case 21:
                     send_case_21(sender);
+                break;
+                case 30:
                 break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
@@ -206,9 +216,11 @@ void *wait_for_message(void *arguments){
                     // } else {
                         if(msg[2] == 4){ //jeśli poprzedni stan nadawcy to basen
                             // printf("%d: basen %d\n", rank, sender);
+                            
                             mes_queue_pool[mes_queue_indx_pool] = sender;
-                        // printf("%d kolejkuje %d\n", rank, sender);
+                        printf("%d kolejkuje pool %d\n", rank, sender);
                             mes_queue_indx_pool++;
+                            pthread_cond_signal(&cond3);
                         } else {
                             mes_queue[mes_queue_indx] = sender;
                             // printf("%d kolejkuje %d\n", rank, sender);
@@ -231,6 +243,9 @@ void *wait_for_message(void *arguments){
                     // printf("%d: sender %d\n", rank, sender);
                     exit_with_error("Wątek będąc w stanie 2 odebrał wiadomość od stanu 2\n");
                     break;  
+                case 30:
+                    pthread_cond_signal(&cond3);
+                break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 2\n");
@@ -250,6 +265,8 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                case 30:
+                break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 3\n");
@@ -268,6 +285,8 @@ void *wait_for_message(void *arguments){
                 case 21:
                     send_case_21(sender);
                 break;  
+                case 30:
+                break;
                 default:
                     printf("%d: MSG STATE %d\n", rank, received_message_state);
                     exit_with_error("ERROR R case 4\n");
@@ -292,7 +311,7 @@ void send_case_21(int send_to){
 void send_msg(int send_to, int m0, int m1, int m2, int m3){
     int send_msg[] = {m0, m1, m2, m3};
 
-    // printf("    %d Send: to %d msg0 %d\n", rank, send_to, m0);
+    printf("    %d Send: to %d msg0 %d\n", rank, send_to, m0);
     MPI_Send(send_msg, 4, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD);
 }
 
@@ -446,6 +465,7 @@ int main(int argc, char **argv)
     printf("%d: Zaczynam od stanu %d, [szatnia: %d, płeć: %d]\n", rank, get_state(), my_room, male);
     sleep(1);
     while(1){
+        // printf("rrr\n");
         sleep(0.01);
         // sleep(1);
         switch (get_state()) {
@@ -489,8 +509,9 @@ int main(int argc, char **argv)
                 my_room = available_room();
                 if(my_room == -1){
                     // timer--;
+                    pthread_cond_wait(&cond3, &lock3); // czekamy na wszystkie odpowiedzi
                     change_state(1);
-                    sleep(1);
+                    // sleep(1);
                     resend_queued_messages_pool();
                 } else {
                     change_state(3);
@@ -503,11 +524,13 @@ int main(int argc, char **argv)
                 if(was_on_pool == -1){
                     // send_to_all(30, 0, my_room, male); // 32, czy był na basenie, nr szatni, plec
                     change_state(4);
+                    send_to_all(30, -1, -1, -1); 
                 } else {
                     // send_to_all(30, 1, my_room, male); // 32, czy był na basenie, nr szatni, plec
                     my_room = -1;
                     was_on_pool = -1;
                     change_state(0);
+                    send_to_all(30, -1, -1, -1); 
                 }
                 break;
             case 4: // basen
