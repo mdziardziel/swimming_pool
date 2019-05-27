@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
-#define NUM_PROC 8
+#define NUM_PROC 12
 #define MSG_HELLO 100
 
 int male = -1;
@@ -40,6 +40,9 @@ pthread_cond_t cond0 = PTHREAD_COND_INITIALIZER;
 
 pthread_mutex_t	lock1 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER; 
+
+pthread_mutex_t	lock2 = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond2 = PTHREAD_COND_INITIALIZER; 
 
 // pthread_mutex_t	lock_status = PTHREAD_MUTEX_INITIALIZER;
 // pthread_cond_t cond_status = PTHREAD_COND_INITIALIZER; 
@@ -177,7 +180,7 @@ void *wait_for_message(void *arguments){
                                             // printf("%d: ++++++++ %d\n", rank, additional_messages);
                         received_messages = 0;
                         additional_messages = 0;
-                        pthread_cond_signal(&cond0);
+                        pthread_cond_signal(&cond1);
                     }
                     break;
                 case 21:
@@ -221,7 +224,7 @@ void *wait_for_message(void *arguments){
     
                     if(received_messages == proc_num - 1){
                         received_messages = 0;
-                        pthread_cond_signal(&cond0);
+                        pthread_cond_signal(&cond2);
                     }
                     break;
                 case 21:
@@ -467,7 +470,7 @@ int main(int argc, char **argv)
                 // printf("%d wysyłam ALL\n", rank);
                 send_to_all(11, timer, get_previous_state(), -1);
                 // sleep(1);
-                pthread_cond_wait(&cond0, &lock0);
+                pthread_cond_wait(&cond1, &lock1);
                 change_state(2);
                 break;
             case 2: // P2
@@ -482,11 +485,12 @@ int main(int argc, char **argv)
                 // }
                 // my_room = tmp_room;
                 // tmp_room = -1;
-                pthread_cond_wait(&cond0, &lock0); // czekamy na wszystkie odpowiedzi
+                pthread_cond_wait(&cond2, &lock2); // czekamy na wszystkie odpowiedzi
                 my_room = available_room();
                 if(my_room == -1){
                     // timer--;
                     change_state(1);
+                    sleep(1);
                     resend_queued_messages_pool();
                 } else {
                     change_state(3);
