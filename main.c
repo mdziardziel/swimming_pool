@@ -64,41 +64,47 @@ void exit_with_error(char* err){
     exit(1234);
 }
 
-int better_priority(int r_rank, int r_timer, int r_prev_state){
-    if(r_prev_state == 4){ // 4 - stan basen
-        if(get_previous_state() == 4){
-            if(r_timer == timer){
-                if(r_rank < rank) return 0;
-            } else {
-                if(r_timer < timer) return 0;
-            }
-        } else {
-            return 0;
-        }
-    } else {
-        if(get_previous_state() != 4){
-            if(r_timer == timer){
-                if(r_rank < rank) return 0;
-            } else {
-                if(r_timer < timer) return 0;
-            }
-        }
-    }
-    //return 1- mamy lepszy priorytet, 0 - mamy gorszy
-    return 1;
+int check_prior(int r_timer, int r_rank){
+    if(r_timer == timer && r_rank < rank) return 0;
+    if(r_timer < timer) return 0;
 
-    // if(r_prev_state == 4 && get_previous_state() != 4){
-    //     return 0;
-    // }else if(r_prev_state != 4 && get_previous_state() == 4){ 
-    //     return 1;
-    // }
-    // else if(r_rank > rank) {
-    //     return 0;
-    // } else if(r_rank < rank){
-    //     return 1;
-    // }else {
-    //     exit_with_error("RANKING");
-    // }
+    return 1;
+}
+
+int better_priority(int r_rank, int r_timer, int r_prev_state){
+    switch(r_prev_state){
+        case 2:
+            switch(get_previous_state()){
+                case 2:
+                    return check_prior(r_timer, r_rank);
+                case 4:
+                    return 1;
+                case 0:
+                    return 0;
+                break;
+            }
+        case 4:
+            switch(get_previous_state()){
+                case 2:
+                    return 0;
+                case 4:
+                    return check_prior(r_timer, r_rank);
+                case 0:
+                    return 0;
+                break;
+            }
+        default:
+            switch(get_previous_state()){
+                case 2:
+                    return 1;
+                case 4:
+                    return 1; 
+                case 0:
+                    return check_prior(r_timer, r_rank);
+                break;
+            }
+    }
+    exit_with_error("PRZY PRÓBIE PRZEJŚCIA DO P2 POPRZEDNI STAN INNY NIŻ 0, 2, 4\n");
 }
 
 void *wait_for_message(void *arguments){
@@ -164,13 +170,13 @@ void *wait_for_message(void *arguments){
                         additional_messages++; //zwiększamy ilość oczekiwanych wiadomości o 1
                         // printf("sdfsdfsfds\n");
                         // printf("%d: ------- %d, timer: %d\n", rank, additional_messages, timer);
-                        printf("    %d odsyłam jeszcze raz %d\n", rank, sender);
+                        // printf("    %d odsyłam jeszcze raz %d\n", rank, sender);
                         send_msg(sender,11, timer, get_previous_state(), -1); // wysyłamy kolejną wiadomość
                     } 
                         if(better_priority(sender, r_timer, r_previous_state)){ //mamy lepszy priorytet lub proces już nam pozowolił wejść
                             // kolejkujemy odebraną wiadomość do późniejszego odesłania
                             mes_queue[mes_queue_indx] = sender;
-                            printf("    %d kolejkuje %d\n", rank, sender);
+                            // printf("    %d kolejkuje %d\n", rank, sender);
                             mes_queue_indx++;
                         } else {
                             // printf("%d: Lepsze %d\n", rank, sender);
@@ -182,7 +188,7 @@ void *wait_for_message(void *arguments){
                 case 10:
                     received_messages++; //zwiększamy liczbę otrzymanych wiadomości
                     messages_sent[sender] = 0; // odznaczamy, że dostaliśmy wiadomość od tego procesu
-                    printf("    %d sender %d additional_messages: %d, received_messages: \n", rank, sender, additional_messages, received_messages);
+                    // printf("    %d sender %d additional_messages: %d, received_messages: %d\n", rank, sender, additional_messages, received_messages);
                     if(received_messages == proc_num + additional_messages - 1){
 
                                             // printf("%d: ++++++++ %d\n", rank, additional_messages);
@@ -218,7 +224,7 @@ void *wait_for_message(void *arguments){
                             // printf("%d: basen %d\n", rank, sender);
                             
                             mes_queue_pool[mes_queue_indx_pool] = sender;
-                        printf("%d kolejkuje pool %d\n", rank, sender);
+                        // printf("%d kolejkuje pool %d\n", rank, sender);
                             mes_queue_indx_pool++;
                             pthread_cond_signal(&cond3);
                         } else {
@@ -311,7 +317,7 @@ void send_case_21(int send_to){
 void send_msg(int send_to, int m0, int m1, int m2, int m3){
     int send_msg[] = {m0, m1, m2, m3};
 
-    printf("    %d Send: to %d msg0 %d\n", rank, send_to, m0);
+    // printf("    %d Send: to %d msg0 %d\n", rank, send_to, m0);
     MPI_Send(send_msg, 4, MPI_INT, send_to, MSG_HELLO, MPI_COMM_WORLD);
 }
 
@@ -508,7 +514,7 @@ int main(int argc, char **argv)
                 pthread_cond_wait(&cond2, &lock2); // czekamy na wszystkie odpowiedzi
                 my_room = available_room();
                 if(my_room == -1){
-                    // timer--;
+                    // timer = -1;
                     pthread_cond_wait(&cond3, &lock3); // czekamy na wszystkie odpowiedzi
                     change_state(1);
                     // sleep(1);
